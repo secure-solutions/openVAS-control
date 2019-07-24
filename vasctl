@@ -1,0 +1,35 @@
+#! /bin/bash
+
+version="1.0"
+
+#root init vasctl
+if [ "$EUID" != "0" ]; then 
+    echo "[INFO] Please run as root"
+    exit
+fi
+
+
+echo "Welcome to vasctl version $version"
+echo "" > /etc/redis.vasctl.bk
+echo $(cat /etc/redis.conf) >> /etc/redis.vasctl.bk
+echo "unixsocket /var/lib/redis/redis.sock" > /etc/redis.conf
+echo "unixsocketperm 700" >> /etc/redis.conf
+echo "port 0" >> /etc/redis.conf
+echo "timeout 0" >> /etc/redis.conf
+echo "databases 128" >> /etc/redis.conf
+echo "kb_location = /var/lib/redis/redis.sock" > /etc/openvas/openvassd.conf
+systemctl start redis.service
+openvas-manage-certs -a
+greenbone-nvt-sync
+greenbone-scapdata-sync
+greenbone-certdata-sync
+systemctl start openvas-scanner.service
+openvasmd --rebuild --progress
+echo "[INFO] Setting up user stuff ..."
+openvasmd --create-user=admin --role=Admin
+echo "[INFO] Generating random password for session ..."
+randompass="$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 13 ; echo '')"
+openvasmd --user=admin --new-password=$randompass
+systemctl start openvasmd.service
+openvasmd -p 9390 -a 127.0.0.1
+gsad -f --listen=127.0.0.1 --mlisten=127.0.0.1 --mport=9390
