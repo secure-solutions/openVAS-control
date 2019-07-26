@@ -1,5 +1,6 @@
 #! /bin/bash
 
+#Version
 version="1.0"
 
 #root init vasctl
@@ -18,54 +19,91 @@ if [ "$1" = "" ] || [ "$1" = "-h" ]; then
   echo "Debian: # vasctl install debian"
   echo "Arch:   # vasctl install arch"
   echo ""
-  echo "First installation"
-  echo "$ get-waterfox download >>> Download the current Waterfox Tarball >>> -d"
-  echo "# get-waterfox install >>> Install the Waterfox Tarball & create all links etc >>> -i"
+  echo "Daemon control"
+  echo "Start all daemons: # vasctl start debian >>> -r"
+  echo "Stop all daemons : # vasctl stop  >>> -x"
   echo ""
-  echo "General commands"
-  echo "# get-waterfox update >>> Update Waterfox >>> -u"
-  echo "$ get-waterfox cleanup >>> Delete old waterfox tarball >>> -C"
-  echo "$ get-waterfox checkupdate >>> Shows if a Waterfox update is available >>> -c"
-  echo "$ get-waterfox version >>> Print version of get-waterfox >>> -v"
-  echo ""
-  echo "Remove Waterfox"
-  echo "# get-waterfox remove >>> Remove Waterfox complete >>> -r"
+  echo "Update OpenVAS"
+  echo "# vasctl update >>> -u"
   echo ""
   echo "Use '-h' to show this help"
-  echo "Please run the commands this way: init; download; install"
+  echo "Please run the commands this way: install; update; start; stop"
   exit
 fi
 
 #Install
 if [ "$1" = "install" ] || [ "$1" = "-i" ]; then
-  echo "Installing vasctl $version for Debian!"
-  echo "[INFO] Updating apt ..."
-  apt update
-  echo "[INFO] Installing packages ..."
-  apt install openvas -y
+  #Debian
+  if [ "$2" = "debian" ]; then
+    echo "Installing OpenVAS for Debian!"
+    echo "[INFO] Updating apt ..."
+	apt update
+	echo "[INFO] Installing packages ..."
+	echo "[INFO] Please choose yes for UNIX socket later ..."
+	read -n 1 -s -p "[INFO] Press any key to continue .."
+	echo ""
+	apt install openvas -y
+  fi
+  #Arch
+  if [ "$2" = "arch" ]; then
+    echo "Installing OpenVAS for Arch!"
+    echo "kb_location = /var/lib/redis/redis.sock" > /etc/openvas/openvassd.conf
+  fi
+  echo "[INFO] Configuring the environment ..."
+  echo $(cat /etc/redis.conf) >> /etc/redis.vasctl.bk
+  echo "unixsocket /var/lib/redis/redis.sock" > /etc/redis.conf
+  echo "unixsocketperm 700" >> /etc/redis.conf
+  echo "port 0" >> /etc/redis.conf
+  echo "timeout 0" >> /etc/redis.conf
+  echo "databases 128" >> /etc/redis.conf
+  systemctl start openvas-scanner.service
+  openvasmd --create-user=admin --role=Admin
+  echo "[INFO] Generating random password for user 'Admin' ..."
+  randompass="$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 13 ; echo '')"
+  openvasmd --user=admin --new-password=$randompass
+  echo "[!ALERT!] CHOOSEN PASSWORD: $randompass  <-- write it down!"
+  echo "[INFO] Installation done!"
   exit
 fi
 
-echo "" > /etc/redis.vasctl.bk
-echo $(cat /etc/redis.conf) >> /etc/redis.vasctl.bk
-echo "unixsocket /var/lib/redis/redis.sock" > /etc/redis.conf
-echo "unixsocketperm 700" >> /etc/redis.conf
-echo "port 0" >> /etc/redis.conf
-echo "timeout 0" >> /etc/redis.conf
-echo "databases 128" >> /etc/redis.conf
-echo "kb_location = /var/lib/redis/redis.sock" > /etc/openvas/openvassd.conf
-systemctl start redis.service
-openvas-manage-certs -a
-greenbone-nvt-sync
-greenbone-scapdata-sync
-greenbone-certdata-sync
-systemctl start openvas-scanner.service
-openvasmd --rebuild --progress
-echo "[INFO] Setting up user stuff ..."
-openvasmd --create-user=admin --role=Admin
-echo "[INFO] Generating random password for session ..."
-randompass="$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 13 ; echo '')"
-openvasmd --user=admin --new-password=$randompass
-systemctl start openvasmd.service
-openvasmd -p 9390 -a 127.0.0.1
-gsad -f --listen=127.0.0.1 --mlisten=127.0.0.1 --mport=9390
+#Run
+if [ "$1" = "start" ] || [ "$1" = "-r" ]; then
+  echo "[INFO] Starting Redis.service"
+  systemctl start redis.service
+  echo "[INFO] Starting openvasmd"
+  openvasmd -p 9390 -a 127.0.0.1
+  echo "[INFO] Starting gsad"
+  gsad -f --listen=127.0.0.1 --mlisten=127.0.0.1 --mport=9390
+  echo "[DONE] Connect to 127.0.0.1:9390"
+  exit
+fi
+
+#Stop
+if [ "$1" = "stop" ] || [ "$1" = "-x" ]; then
+  echo "[INFO] Stopping Redis.service"
+  systemctl stop redis.service
+  echo "[INFO] Killing openvasmd"
+  killall openvasmd -9
+  echo "[INFO] Killing gsad"
+  killall gsad -9
+  echo "[DONE] Ready."
+  exit
+fi
+
+#Update
+if [ "$1" = "update" ] || [ "$1" = "-u" ]; then
+  echo "[INFO] Updating please wait ..."
+  #Debian
+  if [ "$2" = "debian" ]; then
+    openvas-certdata-sync
+  fi
+  #Arch
+  if [ "$2" = "arch" ]; then
+    openvas-manage-certs -a
+	greenbone-nvt-sync
+	greenbone-scapdata-sync
+	greenbone-certdata-sync
+  fi
+  echo "[INFO] Ready."
+  exit
+fi
