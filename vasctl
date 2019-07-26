@@ -8,8 +8,44 @@ if [ "$EUID" != "0" ]; then
     exit
 fi
 
+#Parm init
+if [ "$1" = "" ] || [ "$1" = "-h" ]; then
+  echo "Welcome to vasctl $version !"
+  echo ""
+  echo "Usage:"
+  echo ""
+  echo "Installing OpenVAS to your OS:"
+  echo "Debian: # vasctl install debian"
+  echo "Arch:   # vasctl install arch"
+  echo ""
+  echo "First installation"
+  echo "$ get-waterfox download >>> Download the current Waterfox Tarball >>> -d"
+  echo "# get-waterfox install >>> Install the Waterfox Tarball & create all links etc >>> -i"
+  echo ""
+  echo "General commands"
+  echo "# get-waterfox update >>> Update Waterfox >>> -u"
+  echo "$ get-waterfox cleanup >>> Delete old waterfox tarball >>> -C"
+  echo "$ get-waterfox checkupdate >>> Shows if a Waterfox update is available >>> -c"
+  echo "$ get-waterfox version >>> Print version of get-waterfox >>> -v"
+  echo ""
+  echo "Remove Waterfox"
+  echo "# get-waterfox remove >>> Remove Waterfox complete >>> -r"
+  echo ""
+  echo "Use '-h' to show this help"
+  echo "Please run the commands this way: init; download; install"
+  exit
+fi
 
-echo "Welcome to vasctl version $version"
+#Install
+if [ "$1" = "install" ] || [ "$1" = "-i" ]; then
+  echo "Installing vasctl $version for Debian!"
+  echo "[INFO] Updating apt ..."
+  apt update
+  echo "[INFO] Installing packages ..."
+  apt install openvas -y
+  exit
+fi
+
 echo "" > /etc/redis.vasctl.bk
 echo $(cat /etc/redis.conf) >> /etc/redis.vasctl.bk
 echo "unixsocket /var/lib/redis/redis.sock" > /etc/redis.conf
